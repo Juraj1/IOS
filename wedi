@@ -1,0 +1,364 @@
+#!/bin/sh
+
+########################################################
+# author: 	Jiri Zahradnik <xzahra22@stud.fit.vutbr.cz>#
+# file:		wedi												
+# file was created as project for IOS	
+########################################################
+
+E_NOVARSET=1
+E_NODIR=2
+E_NOEDIT=3
+E_NOARGSET=4
+E_BADARGSET=5
+E_BADDATE=6
+
+if [ "${WEDI_RC}" = "" ]; then
+	>&2 echo "Error, WEDI_RC NOT SET"
+	exit "${E_NOVARSET}"
+fi
+
+if [ ! -e "${WEDI_RC}" ]; then
+	echo "" > "${WEDI_RC}"
+fi
+
+# set flags here
+if [ "${1}" = "-m" ]; then
+	boolM=true
+elif [ "${1}" = "-a" ]; then
+	boolA=true
+elif [ "${1}" = "-b" ]; then
+	boolB=true
+elif [ "${1}" = "-l" ]; then
+	boolL=true
+fi
+
+if [ "${1}" = "-m" ]; then #works
+	###########################################################
+	# print most edited in directory
+	###########################################################
+	
+	if [ "$(echo "${2}" | cut -c1)" = "-" ]; then
+		>&2 echo "Error, filename/folder cannot start with '-'"
+		exit ${E_BADARGSET}
+	fi
+
+	if [ "${2}" = "" ]; then
+		DIR=$(pwd)
+	else
+		DIR=$(readlink -f "${2}")
+	fi
+
+	
+	if [ "$DIR" = "" ]; then
+		>&2 echo "Error, bad argument"
+		exit "${E_NOEDIT}"
+	fi
+	if [ -f "${DIR}" ]; then
+		>&2 echo "Error, FILE entered"
+		exit "${E_NOEDIT}"
+	fi
+
+	if [ "${DIR##*/}" != "" ]; then
+		# this condition makes the script take directories with/without ending /
+		DIR=$(echo "${DIR}""/")
+	fi
+	
+
+ 	FILE="$(cat "${WEDI_RC}" | grep "${DIR}[^/]*" | sort -n -k1)"
+ 	# this construction must stay as it is!
+  	LINE="${FILE##*"
+"}"
+
+	if [ "${FILE}" = "" ]; then
+		>&2 echo "Error, no file was edited by wedi in this folder"
+		exit "${E_NOEDIT}"
+	fi
+
+	
+
+ 	FILE=$(echo "${LINE}" | awk '{$1=$2=""; print $0}' | sed "s/^ *//" )	
+  	COUNT=$(echo "${LINE}" | awk '{print $1}')
+	"$EDITOR" "${FILE}" || "$VISUAL" "${FILE}" ||
+	{
+		# open file with editor or print error
+		>&2 echo "Error, variables \$EDITOR and \$VISUAL not set"
+		exit "${E_NOVARSET}"
+	}
+	COUNT=$(($COUNT + 1))
+	if [ -e "${FILE}" ]; then
+		echo $COUNT"	"$(date +%Y%m%d)"	""${FILE}" >> $WEDI_RC # add entry to the file $(date +%Y%m%d%H%M%S)
+	fi
+
+	exit 0
+fi	
+if [ ${boolA} ]; then
+	##########################################################
+	# print after
+	##########################################################
+	DATE=$(echo "${2}" | grep -o "[0-9][0-9][0-9][0-9]\-[0-9][0-9]\-[0-9][0-9]")
+	DATE=$(echo "${DATE}" | sed -e "s/\-//" | sed -e "s/\-//")
+	if [ "${DATE}" = "" ]; then
+		>&2 echo "Error, no date set or bad date format [YYYY-MM-DD accepted]"
+		exit "${E_BADDATE}"
+	fi
+
+	if [ "$(echo ${3} | cut -c1)" = "-" ]; then
+		>&2 echo "Error, filename/folder cannot start with '-'"
+		exit ${E_BADARGSET}
+	fi
+
+	if [ "${3}" = "" ]; then
+		DIR=$(pwd)
+	else
+		DIR=$(readlink -f "${3}")
+	fi
+
+	if [ "$DIR" = "" ]; then
+		>&2 echo "Error, bad argument"
+		exit "${E_NOEDIT}"
+	fi
+	if [ -f "${DIR}" ]; then
+		>&2 echo "Error, FILE entered"
+		exit "${E_NOEDIT}"
+	fi
+
+	if [ "${DIR##*/}" != "" ]; then
+		# this condition makes the script take directories with/without ending /
+		DIR=$(echo "${DIR}""/")
+	fi
+	
+	FILE="$(cat "${WEDI_RC}" | grep "${DIR}[^/]*")"
+
+	LS="$(cat ${WEDI_RC} | grep "${DIR}")"
+	FILE="$(echo "$LS" | sed "s/[^	]*//" | sed "s/	//" | awk -v TIME=$DATE '{ if ($1 >= TIME){$1=""; print $0}}' | sed "s/^ *//")"
+
+	PRINT=""
+
+	while read -r LINE; do
+		LINE="$(echo "${LINE}" | grep "${DIR}[^/]*" | sed "s/[^	]*//" | sed "s/	//" | awk -v TIME=$DATE '{ if ($1 >= TIME){$1=""; print $0}}' | sed "s/^ *//")"
+		LINE="$(echo "${LINE}" | grep -o "${DIR}[^/]*")"
+		if [ ! "$LINE" = "" ]; then
+			if [ -f "${LINE}" ]; then
+				LINE="$(echo "${LINE}" | sed -e "s/.*\///")"
+				PRINT="${PRINT}""$LINE""
+"
+			fi
+		fi
+	done < "$WEDI_RC"
+	PRINT="$(echo "${PRINT}" | sort -u | sed "/^$/d")"
+	if [ "$PRINT" != "" ]; then
+		echo "$PRINT"
+	fi
+	exit 0
+fi
+if [ ${boolB} ]; then	
+	##########################################################
+	# print before
+	##########################################################
+	DATE=$(echo "${2}" | grep -o "[0-9][0-9][0-9][0-9]\-[0-9][0-9]\-[0-9][0-9]")
+	DATE=$(echo "${DATE}" | sed -e "s/\-//" | sed -e "s/\-//")
+	if [ "${DATE}" = "" ]; then
+		>&2 echo "Error, no date set or bad date format [YYYY-MM-DD accepted]"
+		exit "${E_BADDATE}"
+	fi
+
+
+	if [ "$(echo "${2}" | cut -c1)" = "-" ]; then
+		>&2 echo "Error, filename/folder cannot start with '-'"
+		exit ${E_BADARGSET}
+	fi
+
+	if [ "${3}" = "" ]; then
+		DIR=$(pwd)
+	else
+		DIR=$(readlink -f "${3}")
+	fi
+
+	if [ "$DIR" = "" ]; then
+		>&2 echo "Error, bad argument"
+		exit "${E_NOEDIT}"
+	fi
+	if [ -f "${DIR}" ]; then
+		>&2 echo "Error, FILE entered"
+		exit "${E_NOEDIT}"
+	fi
+
+
+	if [ "${DIR##*/}" != "" ]; then
+		# this condition makes the script take directories with/without ending /
+		DIR=$(echo "${DIR}""/")
+	fi
+
+	PRINT=""
+
+	while read -r LINE; do
+		LINE="$(echo "${LINE}" | grep "${DIR}[^/]*" | sed "s/[^	]*//" | sed "s/	//" | awk -v TIME=$DATE '{ if ($1 <= TIME){$1=""; print $0}}' | sed "s/^ *//")"
+		LINE="$(echo "${LINE}" | grep -o "${DIR}[^/]*")"
+		if [ ! "$LINE" = "" ]; then
+			if [ -f "${LINE}" ]; then
+				LINE="$(echo "${LINE}" | sed -e "s/.*\///")"
+				PRINT="${PRINT}""$LINE""
+"
+			fi
+		fi
+	done < "$WEDI_RC"
+	PRINT="$(echo "${PRINT}" | sort -u | sed "/^$/d")"
+	if [ "$PRINT" != "" ]; then
+		echo "$PRINT"
+	fi
+	exit 0
+fi
+if [ ${boolL} ]; then 
+	##########################################################
+	# list files editet by wedi in directory
+	##########################################################
+	if [ "${2}" = "" ]; then
+		DIR=$(pwd)
+	else
+		DIR="$(readlink -f "${2}")"
+	fi 
+
+	if [ "$(echo "${3}" | cut -c1)" = "-" ]; then
+		>&2 echo "Error, filename/folder cannot start with '-'"
+		exit ${E_BADARGSET}
+	fi
+
+	if [ "$DIR" = "" ]; then
+		>&2 echo "Error, bad argument"
+		exit "${E_NOEDIT}"
+	fi
+	if [ -f "${DIR}" ]; then
+		>&2 echo "Error, FILE entered"
+		exit "${E_NOEDIT}"
+	fi
+
+	if [ "${DIR##*/}" != "" ]; then
+		# this condition makes the script take directories with/without ending /
+		DIR=$(echo "${DIR}""/")
+	fi
+
+
+	
+	FILE="$(cat "${WEDI_RC}" | grep "${DIR}[^/]*" | sort -n -k1)"
+
+	LS="$(cat ${WEDI_RC} | grep -o "${DIR}[^/]*")"
+	PRINT=""
+	while read -r LINE; do
+		LINE="$(echo "${LINE}" | grep -o "${DIR}[^/]*" | sed "s/[^/]*//")"
+		if [ ! "$LINE" = "" ]; then
+			if [ -f "${LINE}" ]; then
+				LINE="$(echo "${LINE}" | sed -e "s/.*\///")"
+				PRINT="${PRINT}""$LINE""
+"
+			fi
+		fi
+	done < "$WEDI_RC"
+	PRINT="$(echo "${PRINT}" | sort -u | sed "/^$/d")"
+	if [ "$PRINT" != "" ]; then
+		echo "$PRINT"
+	fi
+	exit 0
+	
+fi
+
+if [ "${1}" = "" ] || [ -d "${1}" ]; then #works
+	#######################################################
+	# if only directory is said, iterate
+	#######################################################
+	FILE="false"
+	if [ "${1}" = "" ]; then
+		DIR="$(pwd)"
+	else
+		DIR=$(readlink -f "${1}")
+	fi
+
+	if [ "${DIR##*/}" != "" ]; then
+		# this condition makes the script take directories with/without ending /
+		DIR=$(echo "${DIR}""/")
+	fi
+
+	FILE="$(cat "${WEDI_RC}" | grep "${DIR}[^/]*")"
+	
+	OUT=""
+	while read LINE; do 
+		VAR="$LINE"
+		LINE="$(echo "$LINE" | sed "s/[^/]*//" )"
+		LINE="$(echo "$LINE" | grep -o "${DIR}[^/]*")"
+		if [ -f "${LINE}" ]; then
+			OUT="${VAR}"
+		fi
+	done < "$WEDI_RC"
+	# this construction must stay as it is!
+	#######################################################
+	# grep each line of $WEDI_RC, if the string after
+	# / is file, use it, and set variable to open
+	# if it is a directory, I do not give a damn	
+	#######################################################
+	
+
+	if [ "${OUT}" = "" ]; then
+			>&2 echo "Error, no file edited by wedi in this directory"
+			exit "${E_NOEDIT}"
+	fi
+
+	FILE="$(echo "$OUT" | sed "s/[^/]*//")"
+	COUNT=$(echo "${OUT}" | awk '{print $1}')	
+	$EDITOR "${FILE}" || $VISUAL "${FILE}" ||
+	{
+		# open file with editor or print error
+		>&2 echo "Error, variables \$EDITOR and \$VISUAL not set"
+		exit "${E_NOVARSET}"
+	}
+	COUNT=$(($COUNT + 1))
+	if [ -e "${FILE}" ]; then
+		echo $COUNT"	"$(date +%Y%m%d)"	""${FILE}" >> "$WEDI_RC" # add entry to the file $(date +%Y%m%d%H%M%S)
+	fi
+	exit 0
+fi	
+if [ ! -d "${1}" ]; then # arg is not a directory, it is a file WORKS
+
+	if [ "$(echo "${1}" | cut -c1)" = "-" ]; then
+		>&2 echo "Error, filename/folder cannot start with '-'"
+		exit ${E_BADARGSET}
+	fi
+	########################################################
+	# file is set								
+	########################################################
+	FILE=$(readlink -f "${1}") # realpath to file 
+	if [ "${FILE}" = "" ]; then
+   # if file does not exist, just put there 1st argument  
+       	>&2 echo "Error, file failed to open"
+       	exit ${E_NOEDIT}
+    fi
+
+   	if [ "${FILE##*/}" = "" ]; then
+    	>&2 echo "Error, bad file format"
+    	exit ${E_BADARGSET}
+    fi
+    LINE=$(grep "${FILE}" "${WEDI_RC}")	# file has been found in $WEDI_RC on line XYZ
+    LINE="${LINE##*"
+"}"
+	if [ "${LINE}" = "" ]; then
+	# file was opened for the first time
+		COUNT=0
+	else
+	# file was opened before, then read count and delete from $WEDI_RC
+		COUNT=$(echo "${LINE}" | awk '{print $1}')
+	fi
+
+	$EDITOR "${FILE}" || $VISUAL "${FILE}" ||
+	{
+		# open file with editor or print error
+		>&2 echo "Error, variables \$EDITOR and \$VISUAL not set"
+		exit "${E_NOVARSET}"
+	}
+	# increment usage counter and write to file
+	COUNT=$(($COUNT + 1))
+	if [ -e "${FILE}" ]; then
+		echo $COUNT"	"$(date +%Y%m%d)"	""${FILE}" >> "$WEDI_RC" # add entry to the file $(date +%Y%m%d%H%M%S)
+	fi	
+	exit 0
+fi
+echo "Error, bad arg set"
+exit E_BADARGSET
